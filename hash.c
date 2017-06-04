@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "heap.h"
 
 #define HASHMIN 997 // Capacidad Inicial y Minima de la Tabla de Hash
 #define NUMPRIMO 5381  // Numero Primo en la funcion de hashing
@@ -14,9 +15,12 @@
 
 struct hash {
 	lista_t** tabla;
+	size_t* tablacont1;
+	size_t* tablacont2;
+	size_t* tablacont3;
 	size_t capacidad;
 	size_t existentes;
-	hash_destruir_dato_t destruir_dato;
+	//hash_destruir_dato_t destruir_dato;
 };
 
 struct hash_iter {
@@ -28,8 +32,11 @@ struct hash_iter {
 
 typedef struct nodo_hash {
 	char* clave;
-	void* dato;
-} celda_t;
+	size_t hash1;
+	size_t hash2;
+	size_t hash3;
+	size_t rts;
+}celda_t;
 
 /* ******************************************************************
  *            DECLARACION DE LAS FUNCIONES AUXILIARES
@@ -49,18 +56,41 @@ lista_t** crear_hash_tabla(size_t size_hash) {
 	return hash_tabla;
 }
 
+size_t* crear_hash_tablacont(size_t size_hash) {
+	size_t* tablacont = malloc(sizeof(size_t) * size_hash);
+	if (tablacont) {
+		for (size_t i = 0; i < size_hash; i++) {
+			tablacont[i] = 0;
+		}
+	}
+	return tablacont;
+}
 
-size_t hashing(const char *str, size_t hash_capacidad) {
+size_t djb2hash(const char *str, size_t length) {
 	unsigned long hash = NUMPRIMO;
     int c;
     while ((c = *str++)) {
     	hash = ((hash << BITSHIFT) + hash) + c; /*hash * 33 + c*/
     }
-    	return (hash % hash_capacidad);
+    	return (hash % length);
+}
+
+size_t elfhash ( const char *s, size_t length)
+{
+    size_t   h = 0;
+    size_t   high = 0;
+    while ( *s )
+    {
+        h = ( h << 4 ) + *s++;
+        if ( high == h && 0xF0000000 )
+            h ^= high >> 24;
+        h &= ~high;
+    }
+    return h % length;
 }
 
 lista_iter_t* busqueda_hash_cell(hash_t* hash, const char* clave, size_t* index) {
-	*index = hashing(clave, hash->capacidad);
+	*index = djb2hash(clave, hash->capacidad);
 	
 	lista_iter_t* iter = lista_iter_crear(hash->tabla[*index]);
 	if (!iter) return NULL;
@@ -75,7 +105,7 @@ lista_iter_t* busqueda_hash_cell(hash_t* hash, const char* clave, size_t* index)
 	return iter;
 }
 
-celda_t* cargar_hash_cell(const char* clave, void* dato) {
+celda_t* cargar_hash_cell(const char* clave, size_t hash_capacidad, size_t index) {
 	celda_t* celda = malloc(sizeof(celda_t));
 	if (!celda) return NULL;
 	celda->clave = malloc(sizeof(char)* (strlen(clave) + 1));
@@ -84,12 +114,14 @@ celda_t* cargar_hash_cell(const char* clave, void* dato) {
 		return NULL;
 	}
 	strcpy(celda->clave, clave);
-	celda->dato = dato;
+	celda->hash1 = index;
+	celda->hash2 = elfhash(clave, hash_capacidad);
+	celda->hash3 = celda->hash1 * celda->hash2 % hash_capacidad;
 	return celda;
 }
 
-void cell_destruir(celda_t* cell, hash_destruir_dato_t destruir_dato) {
-	if (destruir_dato) destruir_dato(cell->dato);
+void cell_destruir(celda_t* cell) {
+	//if (destruir_dato) destruir_dato(cell->dato);
 	free(cell->clave);
     free(cell);
 }
@@ -105,7 +137,7 @@ void tabla_destruir(lista_t** tabla, size_t capacidad) {
 	free(tabla);
 }
 
-bool hash_rehashing(hash_t* hash, lista_t** new_tabla, size_t new_capacidad) {
+bool hash_rehashing(hash_t* hash, lista_t** new_tabla, size_t new_capacidad, size_t* new_tablacont1, size_t* new_tablacont2, size_t* new_tablacont3) {
 	bool OK = true;
 	size_t i = 0;
 	lista_iter_t* iter = NULL;
@@ -113,7 +145,13 @@ bool hash_rehashing(hash_t* hash, lista_t** new_tabla, size_t new_capacidad) {
 	size_t new_index;
 
 	lista_t** old_tabla = hash->tabla;
+	size_t* old_tablacont1 = hash->tablacont1;
+	size_t* old_tablacont2 = hash->tablacont2;
+	size_t* old_tablacont3 = hash->tablacont3;
 	hash->tabla = new_tabla;
+	hash->tablacont1 = new_tablacont1;
+	hash->tablacont2 = new_tablacont2;
+	hash->tablacont3 = new_tablacont3;
 
 	size_t old_capacidad = hash->capacidad;
 	hash->capacidad = new_capacidad;
@@ -123,18 +161,36 @@ bool hash_rehashing(hash_t* hash, lista_t** new_tabla, size_t new_capacidad) {
 		if (!iter) OK = false;
 		while ((OK) && (!lista_iter_al_final(iter))) {
 			cell = lista_iter_ver_actual(iter);
-			new_index = hashing(cell->clave, hash->capacidad);
+			new_index = djb2hash(cell->clave, hash->capacidad);
 			OK = lista_insertar_ultimo(hash->tabla[new_index], cell);
 			if (!OK) break;
+			hash->tablacont1[new_index] = old_tablacont1[cell->hash1];
+			cell->hash1 = new_index;
+
+			size_t new_index2 = elfhash(cell->clave, hash->capacidad);
+			hash->tablacont2[new_index2] = old_tablacont2[cell->hash2];
+			cell->hash2 = new_index2;
+
+			size_t new_index3 = new_index * new_index2 % hash->capacidad;
+			hash->tablacont3[new_index3] = old_tablacont3[cell->hash3];
+			cell->hash3 = new_index3;
 			lista_iter_avanzar(iter);
 		}
 		lista_iter_destruir(iter);
 		i++;
 	}
-	if (OK) tabla_destruir(old_tabla, old_capacidad);
+	if (OK) {
+		tabla_destruir(old_tabla, old_capacidad);
+		free(old_tablacont1);
+		free(old_tablacont2);
+		free(old_tablacont3);
+	}
 	else {
 		hash->tabla = old_tabla;
 		hash->capacidad = old_capacidad;
+		hash->tablacont1 = old_tablacont1;
+		hash->tablacont2 = old_tablacont2;
+		hash->tablacont3 = old_tablacont3;
 	}
 	return OK;
 }
@@ -146,33 +202,71 @@ bool hash_redimensionar(hash_t* hash) {
 	if (factor_carga < MINCARGA) new_capacidad = hash->capacidad / COEFICIENTE;
 	if (new_capacidad < HASHMIN) return false;
 	lista_t** new_tabla = crear_hash_tabla(new_capacidad);
-	if (!new_tabla) return false;
-	if (!hash_rehashing(hash, new_tabla, new_capacidad)) {
+	size_t* new_tablacont1 = crear_hash_tablacont(new_capacidad);
+	size_t* new_tablacont2 = crear_hash_tablacont(new_capacidad);
+	size_t* new_tablacont3 = crear_hash_tablacont(new_capacidad);
+	if (!new_tabla || !new_tablacont1 || !new_tablacont2 || !new_tablacont3){
+		free(new_tabla);
+		free(new_tablacont1);
+		free(new_tablacont2);
+		free(new_tablacont3);
+		return false;
+	}
+	if (!hash_rehashing(hash, new_tabla, new_capacidad, new_tablacont1, new_tablacont2, new_tablacont3)) {
         tabla_destruir(new_tabla, new_capacidad);
+        free(new_tablacont1);
+		free(new_tablacont2);
+		free(new_tablacont3);
 		return false;
 	}
 	return true;
 }
 
+size_t obtenermin(const hash_t* hash, const celda_t* celda) {
+ 	size_t min = hash->tablacont1[celda->hash1];
+ 	if (min > hash->tablacont2[celda->hash2])
+ 		min = hash->tablacont2[celda->hash2];
+ 	if (min > hash->tablacont3[celda->hash3])
+ 		min = hash->tablacont3[celda->hash3];
+ 	return min;
+ }
+
+ int cmprts(const void* a, const void* b) {
+ 	const celda_t* aux1 = a;
+ 	const celda_t* aux2 = b;
+ 	if (aux1->rts > aux2->rts)
+ 		return 1;
+ 	else if (aux1->rts < aux2->rts)
+ 		return -1;
+ 	else return 0;
+ }
+
 /* ******************************************************************
  *                   PRIMITIVAS DEL HASH
  * *****************************************************************/
 
-hash_t* hash_crear(hash_destruir_dato_t destruir_dato) {
+hash_t* hash_crear() {
  	hash_t* hash = malloc(sizeof(hash_t));
  	if (!hash) return NULL;
  	hash->tabla = crear_hash_tabla(HASHMIN);
- 	if (!hash->tabla) {
+ 	hash->tablacont1 = crear_hash_tablacont(HASHMIN);
+ 	hash->tablacont2 = crear_hash_tablacont(HASHMIN);
+ 	hash->tablacont3 = crear_hash_tablacont(HASHMIN);
+ 	if (!hash->tabla || !hash->tablacont1 || !hash->tablacont2 || !hash->tablacont3) {
+ 		free(hash->tabla);
+ 		free(hash->tablacont1);
+ 		free(hash->tablacont2);
+ 		free(hash->tablacont3);
  		free(hash);
  		return NULL;
  	}
  	hash->capacidad = HASHMIN;
  	hash->existentes = 0;
- 	hash->destruir_dato = destruir_dato;
+ 	//hash->destruir_dato = destruir_dato;
  	return hash;
  }
 
-bool hash_guardar(hash_t *hash, const char *clave, void *dato) {
+bool hash_guardar(hash_t *hash, const char *clave) {
 	hash_redimensionar(hash);
  	size_t index;
  	celda_t* celda = NULL;
@@ -180,21 +274,26 @@ bool hash_guardar(hash_t *hash, const char *clave, void *dato) {
  	if (!iter) return false;
  	celda = lista_iter_ver_actual(iter);
  	if (celda) {
- 		if (hash->destruir_dato) 
-			hash->destruir_dato(celda->dato);
-		celda->dato = dato;
+ 		hash->tablacont1[celda->hash1]++;
+ 		hash->tablacont2[celda->hash2]++;
+ 		hash->tablacont3[celda->hash3]++;
+ 		celda->rts = obtenermin(hash, celda);
 		lista_iter_destruir(iter);
 		return true;
  	}
  	lista_iter_destruir(iter);
- 	celda = cargar_hash_cell(clave, dato);
+ 	celda = cargar_hash_cell(clave, hash->capacidad, index);
  	if (!celda)	return false;
  	lista_insertar_ultimo(hash->tabla[index], celda);
+ 	hash->tablacont1[celda->hash1]++;
+ 	hash->tablacont2[celda->hash2]++;
+ 	hash->tablacont3[celda->hash3]++;
+ 	celda->rts = obtenermin(hash, celda);
  	hash->existentes++;
  	return true;
  }
 
-void *hash_borrar(hash_t *hash, const char *clave) {
+/*void *hash_borrar(hash_t *hash, const char *clave) {
 	hash_redimensionar(hash);
 	size_t index;
 	lista_iter_t* iter = busqueda_hash_cell(hash, clave, &index);
@@ -208,19 +307,19 @@ void *hash_borrar(hash_t *hash, const char *clave) {
 	free(celda);
 	hash->existentes--;
 	return aux_dato;
-}
+}*/
 
-void *hash_obtener(const hash_t *hash, const char *clave) {
+/*void* hash_obtener(const hash_t *hash, const char *clave) {
 	size_t index;
  	lista_iter_t* iter = busqueda_hash_cell((hash_t*) hash, (char*) clave, &index);
  	if (!iter) return NULL;
  	celda_t* celda = lista_iter_ver_actual(iter);
  	lista_iter_destruir(iter);
- 	if (!celda) return NULL;
- 	return celda->dato;
-}
+ 	return celda;
+}// Devuelvo la celda porque necesito el tweet y su minima aparicion*/
 
-bool hash_pertenece(const hash_t* hash, const char* clave) {
+
+/*bool hash_pertenece(const hash_t* hash, const char* clave) {
 	size_t index;
 	lista_iter_t* iter = busqueda_hash_cell((hash_t*) hash, (char*) clave, &index);
 	if (!iter) return false;
@@ -228,7 +327,7 @@ bool hash_pertenece(const hash_t* hash, const char* clave) {
 	lista_iter_destruir(iter);
 	if (!celda) return false;
 	else return true;
-}
+}*/
 
 size_t hash_cantidad(const hash_t* hash) {
 	return hash->existentes;
@@ -240,11 +339,14 @@ void hash_destruir(hash_t *hash) {
 	for (; index < hash->capacidad; index++) {
 		while (!lista_esta_vacia(hash->tabla[index])){
 			cell = lista_borrar_primero(hash->tabla[index]);
-			cell_destruir(cell, hash->destruir_dato);
+			cell_destruir(cell);
 		}
 		lista_destruir(hash->tabla[index], NULL);
 	}
 	free(hash->tabla);
+	free(hash->tablacont1);
+	free(hash->tablacont2);
+	free(hash->tablacont3);
 	free(hash);
 }
 
@@ -272,11 +374,10 @@ hash_iter_t *hash_iter_crear(const hash_t *hash) {
  	return iter;
  }
 
-const char *hash_iter_ver_actual (const hash_iter_t *iter) {
+void *hash_iter_ver_actual (const hash_iter_t *iter) {
 	if (hash_iter_al_final(iter)) return NULL;
-	const celda_t* celda = lista_iter_ver_actual(iter->lista_iter);
-	if (!celda) return NULL;
-	return celda->clave;
+	celda_t* celda = lista_iter_ver_actual(iter->lista_iter);
+	return celda;
 }
 
 bool hash_iter_avanzar(hash_iter_t* hash_iter) {
@@ -304,4 +405,34 @@ bool hash_iter_al_final(const hash_iter_t *hash_iter) {
 void hash_iter_destruir(hash_iter_t* hash_iter) {
 	if(!hash_iter_al_final(hash_iter)) free(hash_iter->lista_iter);
 	free(hash_iter);	
+}
+
+void imprimirTrendingTopics(hash_t* hash, size_t k) {
+	heap_t* heap = heap_crear(cmprts);
+	hash_iter_t* iter = hash_iter_crear(hash);
+	while (!hash_iter_al_final(iter)) {
+		celda_t* celda = hash_iter_ver_actual(iter);
+		if (heap_cantidad(heap) < k)
+			heap_encolar(heap, celda);
+		else {
+			celda_t* celda_min = heap_ver_max(heap);
+			if (cmprts(celda_min, celda) < 0) {
+				celda_min = (celda_t*) heap_desencolar(heap);
+				//cell_destruir(celda_min);
+				heap_encolar(heap, celda);
+			}
+		}
+		hash_iter_avanzar(iter);
+	}
+	hash_iter_destruir(iter);
+	printf("************TWEETS CON TENDENCIA*************\n");
+	while (!heap_esta_vacio(heap)) {
+		celda_t* celda = heap_desencolar(heap);
+		printf("TWEET #%s fue Trending Topic con %zu RTs.\n", celda->clave, celda->rts);
+		//printf("APARICIONES: %zu\n\n", celda->rts);
+		//cell_destruir(celda);
+	}
+	printf("\n\n\n");
+	heap_destruir(heap, NULL);
+	//printf("OK Destruir HEAP\n");
 }
