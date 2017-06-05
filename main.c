@@ -4,41 +4,60 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "hash.h"
+#include "cbf.h"
+
+#define MAX_ARGUMENTS 3
 
 /* ******************************************************************
  *                        PROGRAMA PRINCIPAL
  * *****************************************************************/
-int main(int argc, char* argv[])
-{
-    printf("~~~ INICIO MAIN ~~~\n");
+int main(int argc, char* argv[]) {
+	
+	if (argc != MAX_ARGUMENTS) {
+		printf("Error! Debe pasar solo dos argumento...\n");
+		return 1;
+	}
 
-	size_t buffersize = 0;
-	char* strline = NULL;
-	size_t code = 0;
-	char* aux;
-	size_t linecount = atoi(argv[1]);
-	size_t k = atoi(argv[2]);
-	size_t i;
+	size_t maxlines = atoi(argv[1]);		// Cantidad de lineas maximas consideradas para analisis
+	size_t maxtts = atoi(argv[2]);			// Cantidad de Trending Topics a considerar
+	size_t buffersize = 0;					// Bytes leidos en getline
+	char* strline = NULL;					// Almacena puntero a nueva linea leida
+	size_t linebuffer = 0;					// Tamano de buffer actual para lectura de nueva linea
+	char* token;							// Almacena puntero a cada token de una linea
+	size_t linecount;						// Contador de lineas leidas
+	char delimiter[2] = ",";
 
-	code = getline(&strline, &buffersize, stdin);
-	while (code != -1) {
-		hash_t* hash = hash_crear();
-		i = 0;
-		while ((code != -1) && (i < linecount)) {
-			i++;
-			if (strline[code - 1] == '\n')
-				strline[code - 1] = '\0';
-			aux = strtok(strline, ","); // Obviamos el nombre de usuario.
-			aux = strtok(NULL, ",");
-			while  (aux) {
-				hash_guardar(hash, aux);
-				aux = strtok(NULL, ",");
-			}
-			code = getline(&strline, &buffersize, stdin);
+	if (maxlines == 0 || maxtts == 0) {
+		printf("Error! Los argumentos deben ser numericos y mayores a cero...\n");
+		return 1;
+	}
+
+	linebuffer = getline(&strline, &buffersize, stdin);
+	while (linebuffer != -1) {
+		cbf_t* cbf = cbf_crear();
+		if (!cbf) {
+			printf("Memoria insuficiente. Abortando...\n");
+			return 1;
 		}
-		imprimirTrendingTopics(hash, k);
-		hash_destruir(hash);
+		linecount = 0;
+		while ((linebuffer != -1) && (linecount < maxlines)) {
+			linecount++;
+			if (strline[linebuffer - 1] == '\n')
+				strline[linebuffer - 1] = '\0';
+			token = strtok(strline, delimiter); // Obviamos el nombre de usuario.
+			token = strtok(NULL, delimiter);
+			while  (token) {
+				if (!cbf_guardar(cbf, token)) {
+					printf("Memoria insuficiente. Abortando...\n");
+					cbf_destruir(cbf);
+					return 1;
+				}
+				token = strtok(NULL, delimiter);
+			}
+			linebuffer = getline(&strline, &buffersize, stdin);
+		}
+		imprimirTrendingTopics(cbf, maxtts);
+		cbf_destruir(cbf);
 	}
     return 0;
 }

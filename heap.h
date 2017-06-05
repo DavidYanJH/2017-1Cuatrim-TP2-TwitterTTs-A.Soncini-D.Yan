@@ -3,7 +3,6 @@
 
 #include <stdbool.h>  /* bool */
 #include <stddef.h>	  /* size_t */
-#include "hash.h"
 
 /* Prototipo de función de comparación que se le pasa como parámetro a las
  * diversas funciones del heap.

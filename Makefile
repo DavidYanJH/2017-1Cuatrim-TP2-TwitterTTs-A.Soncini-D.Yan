@@ -1,20 +1,16 @@
 CC = gcc
 CFLAGS = -g -std=c99 -Wall -Wconversion -Wno-sign-conversion -Werror
-TDA = hash
-PRUEBAS = pruebas_alumno
-EXE = pruebas
+TDA = cbf
+EXE = procesar_tweets
 
 
-all: main.o lista.o heap.o testing.o tda
-	$(CC) $(CFLAGS) -o $(EXE) $(TDA).o main.o lista.o heap.o testing.o
+all: tda main.o lista.o heap.o
+	$(CC) $(CFLAGS) -o $(EXE) main.o $(TDA).o lista.o heap.o
 
-tda: main.o testing.o lista.o heap.o
+tda:
 	$(CC) $(CFLAGS) $(TDA).c -c
 
-testing.o:
-	$(CC) $(CFLAGS) testing.c -c
-
-main.o:
+main.o: 
 	$(CC) $(CFLAGS) main.c -c
 
 lista.o:
@@ -27,4 +23,4 @@ clean:
 	rm $(EXE) *.o
 
 run: all
-	valgrind --leak-check=full --track-origins=yes --show-reachable=yes ./$(EXE) tweetsv2
+	valgrind --leak-check=full --track-origins=yes --show-reachable=yes cat tweets.txt | ./pruebas 900000 10

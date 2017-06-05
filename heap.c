@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "heap.h"
-#include "hash.h"
 
 #define CAPAC_INICIAL 36
 #define COEF_REDIM 2
@@ -48,7 +47,7 @@ void upheap(heap_t* heap, size_t actual)
 {
 	if (actual == 0) return;
 	size_t padre = obtener_padre(actual);
-	if (heap->cmp(heap->datos[actual], heap->datos[padre]) < 0) {
+	if (heap->cmp(heap->datos[actual], heap->datos[padre]) > 0) {
 		swap_vectorial(heap->datos, actual, padre);
 		upheap(heap, padre);
 	}
@@ -61,10 +60,10 @@ void downheap(void* array[], size_t actual, size_t lenght, cmp_func_t cmp)
 	size_t hijo_izq = obtener_hijo_izquierdo(actual);
 	size_t hijo_der = obtener_hijo_derecho(actual);
 	if (hijo_izq < lenght)
-		if (cmp(array[hijo_izq], array[maximo]) < 0)
+		if (cmp(array[hijo_izq], array[maximo]) > 0)
 			maximo = hijo_izq;
 	if (hijo_der < lenght)
-		if (cmp(array[hijo_der], array[maximo]) < 0)
+		if (cmp(array[hijo_der], array[maximo]) > 0)
 			maximo = hijo_der;
 	if (maximo != actual) {
 		swap_vectorial(array, maximo, actual);
