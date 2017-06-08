@@ -3,9 +3,11 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "lista.h"
 
 // Los structs deben llamarse "hash" y "hash_iter".
+struct hash;
+struct hash_iter;
+
 typedef struct hash hash_t;
 typedef struct hash_iter hash_iter_t;
 
@@ -14,14 +16,14 @@ typedef void (*hash_destruir_dato_t)(void *);
 
 /* Crea el hash
  */
-hash_t *hash_crear();
+hash_t *hash_crear(hash_destruir_dato_t destruir_dato);
 
 /* Guarda un elemento en el hash, si la clave ya se encuentra en la
  * estructura, la reemplaza. De no poder guardarlo devuelve false.
  * Pre: La estructura hash fue inicializada
  * Post: Se almacenó el par (clave, dato)
  */
-bool hash_guardar(hash_t *hash, const char *clave);
+bool hash_guardar(hash_t *hash, const char *clave, void *dato);
 
 /* Borra un elemento del hash y devuelve el dato asociado.  Devuelve
  * NULL si el dato no estaba.
@@ -63,14 +65,12 @@ hash_iter_t *hash_iter_crear(const hash_t *hash);
 bool hash_iter_avanzar(hash_iter_t *iter);
 
 // Devuelve clave actual, esa clave no se puede modificar ni liberar.
-void* hash_iter_ver_actual(const hash_iter_t *iter);
+char *hash_iter_ver_actual(const hash_iter_t *iter);
 
 // Comprueba si terminó la iteración
 bool hash_iter_al_final(const hash_iter_t *iter);
 
 // Destruye iterador
 void hash_iter_destruir(hash_iter_t* iter);
-
-void imprimirTrendingTopics(hash_t* hash, size_t k);
 
 #endif // HASH_H

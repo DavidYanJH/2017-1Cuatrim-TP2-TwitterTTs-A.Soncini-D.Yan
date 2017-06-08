@@ -4,6 +4,7 @@
 #include "cbf.h"
 #include "lista.h"
 #include "heap.h"
+#include "pila.h"
 
 #define CBFMIN 997 // Capacidad Inicial y Minima de la Tabla de Hash
 #define NUMPRIMO 5381  // Numero Primo en la funcion de hashing
@@ -371,6 +372,7 @@ void cbf_iter_destruir(cbf_iter_t* cbf_iter) {
 
 void imprimirTrendingTopics(cbf_t* cbf, size_t k) {
 	heap_t* heap = heap_crear(cmprts);
+	pila_t* pila = pila_crear();
 	cbf_iter_t* iter = cbf_iter_crear(cbf);
 	while (!cbf_iter_al_final(iter)) {
 		celda_t* celda = cbf_iter_ver_actual(iter);
@@ -388,9 +390,13 @@ void imprimirTrendingTopics(cbf_t* cbf, size_t k) {
 	cbf_iter_destruir(iter);
 	printf("************TWEETS CON TENDENCIA*************\n");
 	while (!heap_esta_vacio(heap)) {
-		celda_t* celda = heap_desencolar(heap);
+		pila_apilar(pila, heap_desencolar(heap));
+	}
+	heap_destruir(heap, NULL);
+	while (!pila_esta_vacia(pila)) {
+		celda_t* celda = pila_desapilar(pila);
 		printf("TWEET #%s fue Trending Topic con %zu RTs.\n", celda->clave, celda->rts);
 	}
 	printf("\n\n\n");
-	heap_destruir(heap, NULL);
+	pila_destruir(pila);
 }
