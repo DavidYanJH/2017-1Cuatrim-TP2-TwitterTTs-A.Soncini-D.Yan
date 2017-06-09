@@ -1,145 +1,153 @@
 #define _GNU_SOURCE
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
+
 #include "hash.h"
-#include "heap.h"
 #include "lista.h"
 
-#define MAX_ARGUMENTS 2
+#define NUM_ARGUM 2
 
-/* ******************************************************************
- *                       FUNCIONES AUXILIARES
- * *****************************************************************/
-typedef struct nodo_tmp {
-	char* usuario;
-	size_t* tweets;
-} nodo_tmp_t;
+/**************************************************************************************
+ *                   FUNCIONES AUXILIARES DEL PROGRAMA PRINCIPAL                        
+ *************************************************************************************/
 
+void procesar_entradas(FILE* arch_lectura, hash_t* hash, size_t* max_tags)
+{
+	ssize_t leidos = 0;
+	char* line = NULL;
+	size_t aux;
+	char* usuario = NULL;
+	char* delimiter = ",";
+	size_t* dato = NULL;
 
-int cmptweets(const void* a, const void* b) {
- 	const nodo_tmp_t* aux1 = a;
- 	const nodo_tmp_t* aux2 = b;
-
- 	if (aux1->tweets > aux2->tweets)
- 		return -1;
- 	else if (aux1->tweets < aux2->tweets)
- 		return 1;
- 	else return 0;
-}
-
-void generarOutput(hash_t* hash, size_t max_dato) {
-	lista_t** arraytmp = malloc(sizeof(lista_t*) * (max_dato + 1));
-	if (!arraytmp) {
-		printf("Memoria insuficiente. Abortando...\n");
-		return;
-	}
-	for (size_t i = 0; i < max_dato + 1; i++) {
-		arraytmp[i] = lista_crear();
-		if (!arraytmp[i]) 
-			printf("Error al crear lista %zu\n", i);
-	}
-
-	hash_iter_t* iter = hash_iter_crear(hash);
-	if (!iter) {
-		printf("Memoria insuficiente. Abortando...\n");
-		free(arraytmp);
-		return;
-	}
-
-	nodo_tmp_t* nodo;
-	while (!hash_iter_al_final(iter)) {
-		nodo = malloc(sizeof(nodo_tmp_t));
-		nodo->usuario = hash_iter_ver_actual(iter);
-		nodo->tweets = hash_obtener(hash, nodo->usuario);
-		lista_insertar_ultimo(arraytmp[*nodo->tweets], nodo);
-		hash_iter_avanzar(iter);
-	}
-	hash_iter_destruir(iter);
-
-
-	printf("************ESTADISTICA DE USUARIOS POR TWEETs*************");
-
-	size_t tweets_ant = 0;
-	for (size_t i = 0; i < max_dato + 1; i++) {
-		while (!lista_esta_vacia(arraytmp[i])) {
-			nodo = (nodo_tmp_t*) lista_borrar_primero(arraytmp[i]);
-				if (*(nodo->tweets) != tweets_ant) {
-					printf("\n%zu: ", *(nodo->tweets));
-					tweets_ant = *nodo->tweets;
-				}
-			printf("%s ",nodo->usuario);
-			free(nodo);
+	while ((leidos = getline(&line, &aux, arch_lectura)) > 0) {
+		usuario = strtok(line, delimiter);
+		if (!hash_pertenece(hash, usuario)) {
+			dato = calloc(1, sizeof(size_t));
+			if (!dato) {
+				hash_destruir(hash);
+				fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+				exit(EXIT_FAILURE);
+			}
+			if (!hash_guardar(hash, usuario, dato)) {
+				free(dato);
+				hash_destruir(hash);
+				fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+				exit(EXIT_FAILURE);
+			}
 		}
-		lista_destruir(arraytmp[i], NULL);
+		dato = hash_obtener(hash, usuario);
+		while (strtok(NULL, delimiter))
+			++*dato;
+		if (*dato > *max_tags) 
+			*max_tags = *dato;
 	}
-	printf("\n");
-	free(arraytmp);
+	free(line);
 }
 
-/* ******************************************************************
- *                        PROGRAMA PRINCIPAL
- * *****************************************************************/
-int main(int argc, char* argv[]) {
-	
-	if (argc != MAX_ARGUMENTS) {
-		printf("Error! Debe pasar solo un argumento...\n");
-		return 1;
+
+void array_counting_destruir(lista_t** array, size_t capacidad)
+{
+	for (size_t index = 0; index < capacidad; ++index)
+		lista_destruir(array[index], NULL);
+	free(array);
+}
+
+
+lista_t** array_counting_crear(size_t capacidad)
+{
+	lista_t** array = malloc(sizeof(lista_t*)*capacidad);
+	if (!array) return NULL;
+	for (size_t index = 0; index < capacidad; ++index) {
+		array[index] = lista_crear();
+		if (!array[index]) {
+			array_counting_destruir(array, index);
+			return NULL;
+		}
+	}
+	return array;
+}	
+
+
+void generar_salidas(hash_t* hash, size_t max_tags)	
+{		
+	hash_iter_t* hash_iter = hash_iter_crear(hash);
+	if (!hash_iter) {
+		hash_destruir(hash);
+		fprintf(stderr, "Memoria insuficiente. Abortando...\n");
+		exit(EXIT_FAILURE);
 	}
 
-	FILE *file_input = fopen(argv[1], "r");
-	if (!file_input) {
-		printf("Error al abrir el archivo de lectura! \n");
-		return 1;
+	size_t capacidad = max_tags + 1;
+	lista_t** array_counting = array_counting_crear(capacidad);
+	if (!array_counting) {
+		hash_iter_destruir(hash_iter);
+		hash_destruir(hash);
+		fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+		exit(EXIT_FAILURE);
+	}
+	char* usuario = NULL;
+	size_t* num_tags = NULL;
+	while (!hash_iter_al_final(hash_iter)) {
+		usuario = hash_iter_ver_actual(hash_iter);
+		num_tags = hash_obtener(hash, usuario);
+		if (!lista_insertar_ultimo(array_counting[*num_tags], usuario)) {
+			hash_iter_destruir(hash_iter);
+			hash_destruir(hash);
+			array_counting_destruir(array_counting, capacidad);
+			fprintf(stderr, "Memoria insuficiente. Abortando...\n");
+			exit(EXIT_FAILURE);
+		}
+		hash_iter_avanzar(hash_iter);
+	}
+	hash_iter_destruir(hash_iter);
+
+	printf("***********ESTADISTICAS DE USUARIOS (CANTIDAD DE TAGS)***********\n");
+	for (size_t index = 0; index < capacidad; ++index) {
+		if (!lista_esta_vacia(array_counting[index])){
+			printf("%zd: ", index);
+			while (!lista_esta_vacia(array_counting[index])){
+				usuario = lista_borrar_primero(array_counting[index]);
+				printf("%s", usuario);
+				if (!lista_esta_vacia(array_counting[index])) printf(", ");
+			}
+			printf("\n");
+		}
+	}
+	array_counting_destruir(array_counting, capacidad);
+}
+
+
+/* ************************************************************************************
+ *                                PROGRAMA PRINCIPAL
+ * ************************************************************************************/
+
+int main(int argc, char* argv[])
+{
+	if (argc != NUM_ARGUM) {
+		fprintf(stderr, "Error en Cantidad de Argumentos al invocar el Programa\n");
+		exit(EXIT_FAILURE);
 	}
 
-	size_t buffersize = 0;					// Bytes leidos en getline
-	char* strline = NULL;					// Almacena puntero a nueva linea leida
-	size_t linebuffer = 0;					// Tamano de buffer actual para lectura de nueva linea
-	char* token;							// Almacena puntero a cada token de una linea
-	char delimiter[2] = ",";				// Caracter delimitador
-	char* usuario;							// Puntero al nombre de usuario
-	size_t max_dato = 0;					// Maxima cantidad de tweets por usuario
-	size_t* dato;							// Puntero al dato del hash
-	bool existe;							// Variable para controlar existencia de clave en hash
+	FILE* arch_lectura = fopen(argv[1], "r");
+	if (!arch_lectura) {
+		fprintf(stderr, "Error al Abrir el Archivo de Lectura\n");
+		exit(EXIT_FAILURE);
+	}
 
 	hash_t* hash = hash_crear(free);
 	if (!hash) {
-		printf("Memoria insuficiente. Abortando...\n");
-		return 1;
+		fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+		exit(EXIT_FAILURE); 
 	}
 
-	linebuffer = getline(&strline, &buffersize, file_input);
-	while (linebuffer != -1) {
-		if (strline[linebuffer - 1] == '\n')
-			strline[linebuffer - 1] = '\0';
-		usuario = strtok(strline, delimiter);			// Leo nombre de usuario
-		dato = hash_obtener(hash, usuario);				// Obtengo cantidad de tweets segun nombre de usuario
-		existe = (dato != NULL);
-		if (!dato) {
-			dato = malloc(sizeof(size_t));
-			if (!dato) {
-				printf("Memoria insuficiente. Abortando...\n");
-				hash_destruir(hash);
-				return 1;
-			}
-			*dato = 0;
-		}
-		token = strtok(NULL, delimiter);			// Leo primer tweet
-		while  (token) {
-			*dato +=1;
-			token = strtok(NULL, delimiter);
-		}
-		if (*dato > max_dato)
-			max_dato = *dato;
-		if (!existe)
-			hash_guardar(hash, usuario, dato);
-		linebuffer = getline(&strline, &buffersize, file_input);
-	}
-	generarOutput(hash, max_dato);
+	size_t max_tags = 0;
+	procesar_entradas(arch_lectura, hash, &max_tags);
+	fclose(arch_lectura);
+	if (max_tags > 0) generar_salidas(hash, max_tags);
 	hash_destruir(hash);
-	fclose(file_input);
-	free(strline);
-    return 0;
+	return EXIT_SUCCESS;
 }
