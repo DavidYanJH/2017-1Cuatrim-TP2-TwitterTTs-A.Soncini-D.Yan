@@ -4,22 +4,28 @@ EXE1 = procesar_tweets
 EXE2 = procesar_usuarios
 
 
-all: p1 p2
+all: clean p1 p2
 
-p1: cbf procesar_tweets.o lista.o heap.o pila.o
-	$(CC) $(CFLAGS) -o $(EXE1) procesar_tweets.o cbf.o lista.o heap.o pila.o
+p1: clean1 auxlib.o countingfilter.o procesar_tweets.o heap.o pila.o hash.o lista.o
+	$(CC) $(CFLAGS) -o $(EXE1) procesar_tweets.o countingfilter.o pila.o heap.o hash.o lista.o auxlib.o
 
-p2: hash procesar_usuarios.o lista.o heap.o
+p2: hash.o procesar_usuarios.o lista.o heap.o
 	$(CC) $(CFLAGS) -o $(EXE2) procesar_usuarios.o hash.o lista.o heap.o
 
-hash:
+pila.o:
+	$(CC) $(CFLAGS) pila.c -c
+
+hash.o:
 	$(CC) $(CFLAGS) hash.c -c
 
-cbf:
-	$(CC) $(CFLAGS) cbf.c -c
+countingfilter.o:
+	$(CC) $(CFLAGS) countingfilter.c -c
 
 procesar_usuarios.o: 
 	$(CC) $(CFLAGS) procesar_usuarios.c -c
+
+auxlib.o:
+	$(CC) $(CFLAGS) auxlib.c -c
 
 procesar_tweets.o: 
 	$(CC) $(CFLAGS) procesar_tweets.c -c
@@ -31,8 +37,13 @@ heap.o:
 	$(CC) $(CFLAGS) heap.c -c
 
 clean:
-	rm $(EXE2) $(EXE1) *.o
+	rm -f $(EXE2) $(EXE1) *.o
 
-run: all
-	valgrind --leak-check=full --track-origins=yes --show-reachable=yes ./procesar_usuarios tweets
+clean1:
+	rm -f $(EXE1) *.o
+
+run1: p1
 	valgrind --leak-check=full --track-origins=yes --show-reachable=yes cat tweets | ./procesar_tweets 50 5
+
+run2: p2
+	valgrind --leak-check=full --track-origins=yes --show-reachable=yes ./procesar_usuarios tweets
