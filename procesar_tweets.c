@@ -4,7 +4,7 @@
 #include "auxlib.h"
 
 #define MAX_ARGUMENTS 3
-#define COUNTING_SIZE 997
+#define COUNTING_SIZE 9887
 
 
 /* ******************************************************************
