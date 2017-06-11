@@ -43,7 +43,7 @@ clean1:
 	rm -f $(EXE1) *.o
 
 run1: p1
-	valgrind --leak-check=full --track-origins=yes --show-reachable=yes cat tweets | ./procesar_tweets 50 5
+	valgrind --leak-check=full --track-origins=yes --show-reachable=yes cat tweetsh | ./procesar_tweets 50 5
 
 run2: p2
-	valgrind --leak-check=full --track-origins=yes --show-reachable=yes ./procesar_usuarios tweets
+	valgrind --leak-check=full --track-origins=yes --show-reachable=yes ./procesar_usuarios tweetsh

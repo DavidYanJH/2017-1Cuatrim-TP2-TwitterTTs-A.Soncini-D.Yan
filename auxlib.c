@@ -31,13 +31,46 @@ int cmprts(const void* a, const void* b) {
  	else return 0;
  }
 
-
 void imprimirTrendingTopics(hash_t* hash, counting_filter_t* counting_filter, size_t maxtts) {
 	pila_t* pila = pila_crear();
+	if (!pila) {
+		fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+		hash_destruir(hash);
+		counting_filter_destruir(counting_filter);
+		exit(EXIT_FAILURE);
+	}
+
 	heap_t* heap = heap_crear(cmprts);
+	if (!heap) {
+		fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+		pila_destruir(pila);
+		hash_destruir(hash);
+		counting_filter_destruir(counting_filter);
+		exit(EXIT_FAILURE);
+	}
+
 	hash_iter_t* iter = hash_iter_crear(hash);
+	if (!iter) {
+		fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+		pila_destruir(pila);
+		heap_destruir(heap, NULL);
+		hash_destruir(hash);
+		counting_filter_destruir(counting_filter);
+		exit(EXIT_FAILURE);
+	}
+
 	while (!hash_iter_al_final(iter)) {
 		nodo_heap_t* nodo_heap = malloc(sizeof(nodo_heap_t));
+		if (!nodo_heap) {
+			fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+			pila_destruir(pila);
+			heap_destruir(heap, NULL);
+			hash_iter_destruir(iter);
+			hash_destruir(hash);
+			counting_filter_destruir(counting_filter);
+			exit(EXIT_FAILURE);
+		}
+
 		char* clavetmp = hash_iter_ver_actual(iter);
 		nodo_heap->clave = clavetmp;
 		nodo_counting_t* nodo_hash = hash_obtener(hash, nodo_heap->clave);
@@ -62,7 +95,8 @@ void imprimirTrendingTopics(hash_t* hash, counting_filter_t* counting_filter, si
 	while (!pila_esta_vacia(pila)) {
 		nodo_heap_t* nodo = pila_desapilar(pila);
 		heap_encolar(heap, nodo);
-		printf("TWEET #%s fue Trending Topic con %zu RTs.\n", nodo->clave, *nodo->tts);
+		//printf("TWEET #%s fue Trending Topic con %zu RTs.\n", nodo->clave, *nodo->tts);
+		printf("#%s fue Trending Topic.\n", nodo->clave);
 	}
 	printf("\n");
 	pila_destruir(pila);
@@ -84,6 +118,7 @@ void procesarEntrada(counting_filter_t* counting_filter, size_t maxlines, size_t
 		
 		if (!hash) {
 			fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+			counting_filter_destruir(counting_filter);
 			exit(EXIT_FAILURE);	
 		}
 
@@ -128,6 +163,9 @@ void procesarEntrada(counting_filter_t* counting_filter, size_t maxlines, size_t
 		imprimirTrendingTopics(hash, counting_filter, maxtts);
 		hash_destruir(hash);										// Destruyo hash temporal
 	}
-
+	if (linebuffer == -1 && !strline) {								// No fue posible allocar buffer para lectura
+		fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
+		exit(EXIT_FAILURE);
+	}
 	counting_filter_destruir(counting_filter);
 }

@@ -29,14 +29,13 @@ size_t elfhash ( const char *s, size_t counting_size)
     return h % counting_size;
 }
 
-
-
 counting_filter_t* counting_filter_crear(size_t counting_size) {
+	if (counting_size == 0) return NULL;
 	counting_filter_t* counting_filter = malloc(sizeof(counting_filter_t));
 	if (!counting_filter) return NULL;
-	counting_filter->tabla1 = malloc(sizeof(size_t) * (counting_size + 1)); //calloc(counting_size, sizeof(size_t));
-	counting_filter->tabla2 = malloc(sizeof(size_t) * (counting_size + 1));
-	counting_filter->tabla3 = malloc(sizeof(size_t) * (counting_size + 1));
+	counting_filter->tabla1 = calloc(counting_size + 1, sizeof(size_t));
+	counting_filter->tabla2 = calloc(counting_size + 1, sizeof(size_t));
+	counting_filter->tabla3 = calloc(counting_size + 1, sizeof(size_t));
 	if (!counting_filter->tabla1 || !counting_filter->tabla2 || !counting_filter->tabla3) {
 		free(counting_filter->tabla1);
 		free(counting_filter->tabla2);
@@ -44,11 +43,6 @@ counting_filter_t* counting_filter_crear(size_t counting_size) {
 		free(counting_filter);
 		fprintf(stderr, "Memoria Insuficiente. Abortando...\n");
 		return NULL;
-	}
-	for (size_t i = 0; i < counting_size; i++) {
-		counting_filter->tabla1[i] = 0;
-		counting_filter->tabla2[i] = 0;
-		counting_filter->tabla3[i] = 0;
 	}
 	counting_filter->capacidad = counting_size;
 	return counting_filter;
